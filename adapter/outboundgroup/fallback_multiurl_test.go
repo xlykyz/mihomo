@@ -85,3 +85,38 @@ func TestExtraTestURLsLegacySafe(t *testing.T) {
 		t.Fatalf("extraTestURLs(single) = %#v, want nil", got)
 	}
 }
+
+func TestNewFallbackBuildsLegacyAndMultiURLSets(t *testing.T) {
+	legacy, err := NewFallback(
+		GroupCommonOption{Name: "legacy", URL: "https://example.test/"},
+		FallbackOption{},
+		nil,
+		nil,
+	)
+	if err != nil {
+		t.Fatalf("NewFallback legacy returned error: %v", err)
+	}
+	if want := []string{"https://example.test/"}; !reflect.DeepEqual(legacy.testUrls, want) {
+		t.Fatalf("legacy testUrls = %#v, want %#v", legacy.testUrls, want)
+	}
+
+	multi, err := NewFallback(
+		GroupCommonOption{
+			Name: "multi",
+			URL:  "https://example-a.test/",
+			URLs: []string{
+				"https://example-a.test/",
+				"https://example-b.test/",
+			},
+		},
+		FallbackOption{},
+		nil,
+		nil,
+	)
+	if err != nil {
+		t.Fatalf("NewFallback multi returned error: %v", err)
+	}
+	if want := []string{"https://example-a.test/", "https://example-b.test/"}; !reflect.DeepEqual(multi.testUrls, want) {
+		t.Fatalf("multi testUrls = %#v, want %#v", multi.testUrls, want)
+	}
+}
