@@ -19,6 +19,7 @@ type Fallback struct {
 	*GroupBase
 	disableUDP     bool
 	testUrl        string
+	testUrls       []string
 	selected       string
 	expectedStatus string
 }
@@ -88,6 +89,7 @@ func (f *Fallback) MarshalJSON() ([]byte, error) {
 		"now":            f.Now(),
 		"all":            all,
 		"testUrl":        f.testUrl,
+		"testUrls":       f.testUrls,
 		"expectedStatus": f.expectedStatus,
 		"fixed":          f.selected,
 		"hidden":         f.Hidden(),
@@ -102,16 +104,25 @@ func (f *Fallback) Unwrap(metadata *C.Metadata, touch bool) C.Proxy {
 	return proxy
 }
 
+func (f *Fallback) aliveForAllTestUrls(proxy C.Proxy) bool {
+	for _, testURL := range f.testUrls {
+		if !proxy.AliveForTestUrl(testURL) {
+			return false
+		}
+	}
+	return true
+}
+
 func (f *Fallback) findAliveProxy(touch bool) C.Proxy {
 	proxies := f.GetProxies(touch)
 	for _, proxy := range proxies {
 		if len(f.selected) == 0 {
-			if proxy.AliveForTestUrl(f.testUrl) {
+			if f.aliveForAllTestUrls(proxy) {
 				return proxy
 			}
 		} else {
 			if proxy.Name() == f.selected {
-				if proxy.AliveForTestUrl(f.testUrl) {
+				if f.aliveForAllTestUrls(proxy) {
 					return proxy
 				} else {
 					f.selected = ""
@@ -137,11 +148,15 @@ func (f *Fallback) Set(name string) error {
 	}
 
 	f.selected = name
-	if !p.AliveForTestUrl(f.testUrl) {
+	expectedStatus, _ := utils.NewUnsignedRanges[uint16](f.expectedStatus)
+	for _, testURL := range f.testUrls {
+		if p.AliveForTestUrl(testURL) {
+			continue
+		}
+
 		ctx, cancel := context.WithTimeout(context.Background(), time.Millisecond*time.Duration(5000))
-		defer cancel()
-		expectedStatus, _ := utils.NewUnsignedRanges[uint16](f.expectedStatus)
-		_, _ = p.URLTest(ctx, f.testUrl, expectedStatus)
+		_, _ = p.URLTest(ctx, testURL, expectedStatus)
+		cancel()
 	}
 
 	return nil
@@ -160,6 +175,11 @@ func (f *Fallback) Proxies() []C.Proxy {
 }
 
 func NewFallback(option GroupCommonOption, fallbackOption FallbackOption, emptyFallback C.Proxy, providers []P.ProxyProvider) (*Fallback, error) {
+	testUrls := option.URLs
+	if len(testUrls) == 0 {
+		testUrls = []string{option.URL}
+	}
+
 	return &Fallback{
 		GroupBase: NewGroupBase(GroupBaseOption{
 			Name:           option.Name,
@@ -176,6 +196,7 @@ func NewFallback(option GroupCommonOption, fallbackOption FallbackOption, emptyF
 		}),
 		disableUDP:     option.DisableUDP,
 		testUrl:        option.URL,
+		testUrls:       append([]string(nil), testUrls...),
 		expectedStatus: option.ExpectedStatus,
 	}, nil
 }
