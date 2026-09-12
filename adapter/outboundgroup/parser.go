@@ -131,6 +131,9 @@ func ParseProxyGroup(config map[string]any, proxyMap map[string]C.Proxy, provide
 	groupOption.ExpectedStatus = status
 
 	if len(groupOption.URLs) != 0 {
+		if groupOption.Type != "fallback" {
+			return nil, fmt.Errorf("%s: `urls` is only supported by fallback groups", groupName)
+		}
 		if strings.TrimSpace(groupOption.URL) != "" {
 			return nil, fmt.Errorf("%s: `url` and `urls` are mutually exclusive", groupName)
 		}
@@ -162,7 +165,7 @@ func ParseProxyGroup(config map[string]any, proxyMap map[string]C.Proxy, provide
 			}
 		} else {
 			addTestUrlToProviders(PDs, groupOption.URL, expectedStatus, groupOption.Filter, uint(groupOption.Interval))
-			for _, testURL := range groupOption.URLs[1:] {
+			for _, testURL := range extraTestURLs(groupOption.URLs) {
 				addTestUrlToProviders(PDs, testURL, expectedStatus, groupOption.Filter, uint(groupOption.Interval))
 			}
 		}
@@ -197,7 +200,7 @@ func ParseProxyGroup(config map[string]any, proxyMap map[string]C.Proxy, provide
 			return nil, fmt.Errorf("%s: %w", groupName, err)
 		}
 
-		for _, testURL := range groupOption.URLs[1:] {
+		for _, testURL := range extraTestURLs(groupOption.URLs) {
 			pd.RegisterHealthCheckTask(testURL, expectedStatus, groupOption.Filter, uint(groupOption.Interval))
 		}
 
@@ -267,6 +270,13 @@ func getProviders(mapping map[string]P.ProxyProvider, list []string) ([]P.ProxyP
 		ps = append(ps, p)
 	}
 	return ps, nil
+}
+
+func extraTestURLs(urls []string) []string {
+	if len(urls) <= 1 {
+		return nil
+	}
+	return urls[1:]
 }
 
 func normalizeTestURLs(urls []string) ([]string, error) {
