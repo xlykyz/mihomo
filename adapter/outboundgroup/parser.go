@@ -28,6 +28,7 @@ type GroupCommonOption struct {
 	Proxies             []string `group:"proxies,omitempty"`
 	Use                 []string `group:"use,omitempty"`
 	URL                 string   `group:"url,omitempty"`
+	URLs                []string `group:"urls,omitempty"`
 	Interval            int      `group:"interval,omitempty"`
 	TestTimeout         int      `group:"timeout,omitempty"`
 	MaxFailedTimes      int      `group:"max-failed-times,omitempty"`
@@ -129,6 +130,19 @@ func ParseProxyGroup(config map[string]any, proxyMap map[string]C.Proxy, provide
 	}
 	groupOption.ExpectedStatus = status
 
+	if len(groupOption.URLs) != 0 {
+		if strings.TrimSpace(groupOption.URL) != "" {
+			return nil, fmt.Errorf("%s: `url` and `urls` are mutually exclusive", groupName)
+		}
+
+		urls, err := normalizeTestURLs(groupOption.URLs)
+		if err != nil {
+			return nil, fmt.Errorf("%s: %w", groupName, err)
+		}
+		groupOption.URLs = urls
+		groupOption.URL = urls[0]
+	}
+
 	if len(groupOption.Use) != 0 {
 		PDs, err := getProviders(providersMap, groupOption.Use)
 		if err != nil {
@@ -148,6 +162,9 @@ func ParseProxyGroup(config map[string]any, proxyMap map[string]C.Proxy, provide
 			}
 		} else {
 			addTestUrlToProviders(PDs, groupOption.URL, expectedStatus, groupOption.Filter, uint(groupOption.Interval))
+			for _, testURL := range groupOption.URLs[1:] {
+				addTestUrlToProviders(PDs, testURL, expectedStatus, groupOption.Filter, uint(groupOption.Interval))
+			}
 		}
 		providers = append(providers, PDs...)
 	}
@@ -178,6 +195,10 @@ func ParseProxyGroup(config map[string]any, proxyMap map[string]C.Proxy, provide
 		pd, err := provider.NewCompatibleProvider(groupName, ps, hc)
 		if err != nil {
 			return nil, fmt.Errorf("%s: %w", groupName, err)
+		}
+
+		for _, testURL := range groupOption.URLs[1:] {
+			pd.RegisterHealthCheckTask(testURL, expectedStatus, groupOption.Filter, uint(groupOption.Interval))
 		}
 
 		providers = append([]P.ProxyProvider{pd}, providers...)
@@ -246,6 +267,28 @@ func getProviders(mapping map[string]P.ProxyProvider, list []string) ([]P.ProxyP
 		ps = append(ps, p)
 	}
 	return ps, nil
+}
+
+func normalizeTestURLs(urls []string) ([]string, error) {
+	normalized := make([]string, 0, len(urls))
+	seen := make(map[string]struct{}, len(urls))
+	for _, url := range urls {
+		url = strings.TrimSpace(url)
+		if url == "" {
+			return nil, errors.New("`urls` contains an empty URL")
+		}
+		if _, ok := seen[url]; ok {
+			continue
+		}
+		seen[url] = struct{}{}
+		normalized = append(normalized, url)
+	}
+
+	if len(normalized) == 0 {
+		return nil, errors.New("`urls` must contain at least one URL")
+	}
+
+	return normalized, nil
 }
 
 func addTestUrlToProviders(providers []P.ProxyProvider, url string, expectedStatus utils.IntRanges[uint16], filter string, interval uint) {
