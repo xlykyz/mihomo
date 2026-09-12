@@ -77,6 +77,12 @@ func TestNormalizeTestURLsRejectsEmptyEntry(t *testing.T) {
 	}
 }
 
+func TestNormalizeTestURLsRejectsEmptyList(t *testing.T) {
+	if _, err := normalizeTestURLs(nil); err == nil {
+		t.Fatal("expected empty URL list to be rejected")
+	}
+}
+
 func TestExtraTestURLsLegacySafe(t *testing.T) {
 	if got := extraTestURLs(nil); got != nil {
 		t.Fatalf("extraTestURLs(nil) = %#v, want nil", got)
