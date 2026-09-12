@@ -20,6 +20,7 @@ type Fallback struct {
 	disableUDP     bool
 	testUrl        string
 	testUrls       []string
+	multiTestUrls  bool
 	selected       string
 	expectedStatus string
 }
@@ -84,18 +85,21 @@ func (f *Fallback) MarshalJSON() ([]byte, error) {
 	for _, proxy := range f.GetProxies(false) {
 		all = append(all, proxy.Name())
 	}
-	return json.Marshal(map[string]any{
+	payload := map[string]any{
 		"type":           f.Type().String(),
 		"now":            f.Now(),
 		"all":            all,
 		"testUrl":        f.testUrl,
-		"testUrls":       f.testUrls,
 		"expectedStatus": f.expectedStatus,
 		"fixed":          f.selected,
 		"hidden":         f.Hidden(),
 		"icon":           f.Icon(),
 		"emptyFallback":  f.EmptyFallback().Name(),
-	})
+	}
+	if f.multiTestUrls {
+		payload["testUrls"] = f.testUrls
+	}
+	return json.Marshal(payload)
 }
 
 // Unwrap implements C.ProxyAdapter
@@ -197,6 +201,7 @@ func NewFallback(option GroupCommonOption, fallbackOption FallbackOption, emptyF
 		disableUDP:     option.DisableUDP,
 		testUrl:        option.URL,
 		testUrls:       append([]string(nil), testUrls...),
+		multiTestUrls:  len(option.URLs) != 0,
 		expectedStatus: option.ExpectedStatus,
 	}, nil
 }
