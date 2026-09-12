@@ -130,7 +130,7 @@ func ParseProxyGroup(config map[string]any, proxyMap map[string]C.Proxy, provide
 	}
 	groupOption.ExpectedStatus = status
 
-	if len(groupOption.URLs) != 0 {
+	if _, urlsConfigured := config["urls"]; urlsConfigured {
 		if groupOption.Type != "fallback" {
 			return nil, fmt.Errorf("%s: `urls` is only supported by fallback groups", groupName)
 		}
@@ -201,7 +201,7 @@ func ParseProxyGroup(config map[string]any, proxyMap map[string]C.Proxy, provide
 		}
 
 		for _, testURL := range extraTestURLs(groupOption.URLs) {
-			pd.RegisterHealthCheckTask(testURL, expectedStatus, groupOption.Filter, uint(groupOption.Interval))
+			pd.RegisterHealthCheckTask(testURL, expectedStatus, "", uint(groupOption.Interval))
 		}
 
 		providers = append([]P.ProxyProvider{pd}, providers...)
